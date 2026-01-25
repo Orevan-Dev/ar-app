@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QCARConfig>
+  <Tracking>
+    <ImageTarget name="cobal1" size="40.000000 40.298386" />
+    <ImageTarget name="cobal2" size="40.000000 40.000000" />
+    <ImageTarget name="MeetNada" size="20.000000 14.987013" />
+    <ImageTarget name="MeetFatima" size="20.000000 15.038561" />
+    <ImageTarget name="MeetBadr" size="20.000000 14.916559" />
+    <ImageTarget name="VerfyTU01" size="40.000000 27.011583" />
+    <ImageTarget name="ILEAD" size="45.000000 25.312500" />
+    <ImageTarget name="Training-ARF" size="40.000000 22.500000" />
+    <ImageTarget name="Verify-Moment" size="40.000000 22.500000" />
+    <ImageTarget name="galvusar02" size="40.000000 28.185986" />
+    <ImageTarget name="galvusar01" size="40.000000 28.290766" />
+    <ImageTarget name="Reavel" size="45.000000 64.299713" />
+    <ImageTarget name="Tester" size="45.000000 63.852539" />
+    <ImageTarget name="Reality04" size="45.000000 31.728516" />
+    <ImageTarget name="Reality03" size="45.000000 31.728516" />
+    <ImageTarget name="Reality02" size="45.000000 31.728516" />
+    <ImageTarget name="Reality01" size="45.000000 31.728516" />
+    <ImageTarget name="Party_woman" size="25.000000 17.620968" />
+    <ImageTarget name="Party_man" size="25.000000 17.620968" />
+    <ImageTarget name="Office" size="25.000000 17.620968" />
+    <ImageTarget name="Kitchen" size="25.000000 17.620968" />
+    <ImageTarget name="Woman" size="25.000000 17.673889" />
+    <ImageTarget name="Man" size="25.000000 17.673889" />
+  </Tracking>
+</QCARConfig>

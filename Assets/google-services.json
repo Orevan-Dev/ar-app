@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "350288722486",
+    "project_id": "orevan-ar-game",
+    "storage_bucket": "orevan-ar-game.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:350288722486:android:7dbc810d4c78eca58f3697",
+        "android_client_info": {
+          "package_name": "com.alkottab.orevan_ar2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTI-1ZgnhWBA9CqBNJbKU8xy-xmLjF4lY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

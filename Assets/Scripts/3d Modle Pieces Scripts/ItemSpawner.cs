@@ -138,8 +138,17 @@ public class ItemSpawner : MonoBehaviour
 
     public void SpawnItems(List<GameItemData> items)
     {
-        if (hasSpawned || !GameModeManager.Instance.isGameRunning)
+        if (items == null || items.Count == 0)
+        {
+            Debug.LogWarning("[ItemSpawner] SpawnItems called with empty or null list. Ignoring.");
             return;
+        }
+
+        if (hasSpawned || !GameModeManager.Instance.isGameRunning)
+        {
+            Debug.Log($"[ItemSpawner] Spawn ignored. hasSpawned: {hasSpawned}, isGameRunning: {GameModeManager.Instance.isGameRunning}");
+            return;
+        }
 
         hasSpawned = true;
         spawnedItems.Clear();

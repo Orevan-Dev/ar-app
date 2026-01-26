@@ -15,6 +15,7 @@ namespace Managers
         private FirebaseFirestore db;
         private CollectionReference teamsRef;
         private ListenerRegistration winnerListener;
+        private ListenerRegistration leaderboardListener;
 
         public string CurrentTeamId { get; private set; }
         public bool IsGameEnded { get; private set; } = false;
@@ -50,13 +51,33 @@ namespace Managers
                 if (snapshot.Count > 0)
                 {
                     IsGameEnded = true;
-                    // Try to get winner name for debug (safely)
-                    string winnerName = "Unknown";
-                    try {
-                        winnerName = snapshot.Documents.First().GetValue<string>("teamName");
-                    } catch {}
                     
-                    Debug.Log($"🏆 GAME OVER! Winner found: {winnerName}. Stopping updates.");
+                    // Extract winner data safely
+                    string winnerTeamId = "Unknown";
+                    string winnerName = "Unknown";
+                    
+                    try 
+                    {
+                        DocumentSnapshot winnerDoc = snapshot.Documents.First();
+                        winnerTeamId = winnerDoc.Id;
+                        winnerName = winnerDoc.GetValue<string>("teamName");
+                    } 
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[TeamManager] Error extracting winner data: {e.Message}");
+                    }
+                    
+                    Debug.Log($"🏆 GAME OVER! Winner found: {winnerName} (ID: {winnerTeamId})");
+                    
+                    // 🎯 PHASE 2: Trigger game end via GameEndManager
+                    if (GameEndManager.Instance != null)
+                    {
+                        GameEndManager.Instance.TriggerGameEnd(winnerTeamId, winnerName);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[TeamManager] GameEndManager not found! Game end UI will not show.");
+                    }
                 }
                 else
                 {
@@ -224,9 +245,38 @@ namespace Managers
             });
         }
 
+        /// <summary>
+        /// Starts a real-time listener for the leaderboard.
+        /// The callback will fire immediately, and then every time any team's score changes.
+        /// </summary>
+        public void ListenToRankedTeams(Action<List<TeamModel>> onUpdate)
+        {
+            // Stop previous listener if it exists
+            if (leaderboardListener != null) leaderboardListener.Stop();
+
+            Query query = teamsRef
+                .OrderByDescending("collectedItemsCount")
+                .OrderBy("createdAt");
+
+            leaderboardListener = query.Listen(snapshot =>
+            {
+                List<TeamModel> rankedList = new List<TeamModel>();
+                foreach (DocumentSnapshot doc in snapshot.Documents)
+                {
+                    TeamModel team = doc.ConvertTo<TeamModel>();
+                    team.Id = doc.Id;
+                    rankedList.Add(team);
+                }
+                
+                Debug.Log($"[Leaderboard] Received real-time update. Team count: {rankedList.Count}");
+                onUpdate?.Invoke(rankedList);
+            });
+        }
+
         private void OnDestroy()
         {
             if (winnerListener != null) winnerListener.Stop();
+            if (leaderboardListener != null) leaderboardListener.Stop();
         }
     }
 }

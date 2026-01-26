@@ -131,6 +131,20 @@ public class QuestionManager : MonoBehaviour
         EndSession();
     }
 
+    /// <summary>
+    /// Phase 2: Immediately cancels the current question without any feedback.
+    /// Called when the game ends globally.
+    /// </summary>
+    public void CancelCurrentQuestion()
+    {
+        if (IsSessionActive)
+        {
+            Debug.Log("[QuestionManager] Force-cancelling question due to game end.");
+            if (QuestionUI.Instance != null) QuestionUI.Instance.Hide();
+            EndSession();
+        }
+    }
+
     private void EndSession()
     {
         currentItemData = null;

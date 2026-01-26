@@ -25,6 +25,7 @@ public class GameModeManager : MonoBehaviour
     public GameObject confirmEndGamePanel;
     public TMP_InputField input;
     public GameObject teamNameErrorObject;
+    public GameObject teamCreationLoader; // Reference to loading spinner/overlay
     private Coroutine errorToastCoroutine; // Track the running coroutine
     public bool isGameRunning = false; // Legacy flag, kept for compatibility
     public GameObject endGameButton;
@@ -49,6 +50,14 @@ public class GameModeManager : MonoBehaviour
             GameObject tm = new GameObject("TeamManager");
             tm.AddComponent<TeamManager>();
             Debug.Log("Created TeamManager automatically.");
+        }
+
+        // Ensure GameEndManager exists (Phase 2)
+        if (FindObjectOfType<Managers.GameEndManager>() == null)
+        {
+            GameObject gem = new GameObject("GameEndManager");
+            gem.AddComponent<Managers.GameEndManager>();
+            Debug.Log("Created GameEndManager automatically.");
         }
     }
 
@@ -181,6 +190,12 @@ public class GameModeManager : MonoBehaviour
         {
             Debug.Log("⏳ Waiting for room config... (This should not happen if flow is correct)");
             return;
+        }
+
+        // 🧠 NEW: Ensure GameSession has items. If not, we wait for OnDataLoaded to trigger the spawn.
+        if (GameSession.Instance.TotalItems == 0)
+        {
+            Debug.LogWarning("⏳ Items not loaded yet. Game will start, but pieces will spawn once data arrives.");
         }
 
         isGameRunning = true;
@@ -326,9 +341,17 @@ public class GameModeManager : MonoBehaviour
                 return;
             }
 
+            // Show Loader and Disable Input
+            if (teamCreationLoader != null) teamCreationLoader.SetActive(true);
+            input.interactable = false;
+
             // Call TeamManager to create team in Firestore
             TeamManager.Instance.CreateTeam(teamNameStr, (teamId) => {
                 
+                // Success: Hide loader, enable input (though we hide panel anyway)
+                if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
+                input.interactable = true;
+
                 TeamData.TeamName = teamNameStr; // Keep local Reference
                 
                 if (teamNameErrorObject != null) teamNameErrorObject.SetActive(false);
@@ -339,6 +362,11 @@ public class GameModeManager : MonoBehaviour
 
             }, (errorMsg) => {
                 Debug.LogError("Failed to create team: " + errorMsg);
+                
+                // Failure: Hide loader and re-enable input so user can try again
+                if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
+                input.interactable = true;
+                
                 // Optionally show error to user
             });
         }

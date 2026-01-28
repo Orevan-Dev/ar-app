@@ -118,6 +118,7 @@ public class GameModeManager : MonoBehaviour
                 if (scanningUI) scanningUI.gameObject.SetActive(true);
                 if (gameUI) gameUI.gameObject.SetActive(false);
                 if (teamNamePanel) teamNamePanel.SetActive(false);
+                if (input != null) input.gameObject.SetActive(false); // 🧠 iOS UI FIX: Prevent constraint errors
                 if (CollectionUI.Instance != null) CollectionUI.Instance.Hide(); // Hide tracker
                 HideMarkerUIs(); // Hide any floating "Tap text" until found again
                 break;
@@ -126,6 +127,7 @@ public class GameModeManager : MonoBehaviour
                 scanningUI.gameObject.SetActive(true); // Keep scanning UI/overlay active if needed
                 gameUI.gameObject.SetActive(false);
                 teamNamePanel.SetActive(false);
+                if (input != null) input.gameObject.SetActive(false); // 🧠 iOS UI FIX
                 break;
 
             case GameState.ReadyToPlay:
@@ -136,10 +138,7 @@ public class GameModeManager : MonoBehaviour
                 // 🧠 FIX: gameUI contains TeamNamePanel, so it MUST be active
                 gameUI.gameObject.SetActive(true);
                 teamNamePanel.SetActive(true);
-                
-                // Force UI visibility properties
-                teamNamePanel.transform.localScale = Vector3.one;
-                // teamNamePanel.transform.localPosition = Vector3.zero; // Optional, might break layout if specific pos needed
+                if (input != null) input.gameObject.SetActive(true); // 🧠 iOS UI FIX: Enable only when needed
                 
                 // Ensure other game HUD elements are hidden
                 if (endGameButton != null) endGameButton.SetActive(false);
@@ -252,6 +251,20 @@ public class GameModeManager : MonoBehaviour
             targetHandler.enabled = false;
         }
 
+        // 🧠 RE-ENABLE ITEM COLLECTOR: In case it was disabled by GameEndManager
+        var collector = FindObjectOfType<ItemCollector>();
+        if (collector != null)
+        {
+            collector.enabled = true;
+            Debug.Log("[GAME MODE] ItemCollector re-enabled for new session.");
+        }
+
+        // 🧠 RESET QUESTION MANAGER: Clear any stuck states
+        if (QuestionManager.Instance != null)
+        {
+            QuestionManager.Instance.ResetManager();
+        }
+
         Debug.Log("[GAME MODE] Started with GPS world origin");
     }
 
@@ -315,6 +328,28 @@ public class GameModeManager : MonoBehaviour
 
         Debug.Log("🔄 System Reset Complete. Returning to None state.");
         SetState(GameState.None); 
+
+        // 🧠 iOS FIX: If we are still looking at a marker, manually trigger the Scanned state UI
+        // since Vuforia won't fire a new OnTrackingFound event if tracking never broke.
+        StartCoroutine(CheckForActiveMarkersAfterReset());
+    }
+
+    private IEnumerator CheckForActiveMarkersAfterReset()
+    {
+        // Wait a frame for states to settle
+        yield return null; 
+
+        var markers = FindObjectsOfType<OrevanARMarker>();
+        foreach (var m in markers)
+        {
+            if (m.IsVuforiaTracked)
+            {
+                Debug.Log($"📱 iOS/Stable Tracking: Marker {m.name} is still tracked after reset. Re-triggering UI.");
+                OnTargetScanned(); // Set global state
+                m.SimulateTrackingFound(); // Manually show marker UI
+                break;
+            }
+        }
     }
 
     public void OnSubmitTeam()
@@ -327,17 +362,7 @@ public class GameModeManager : MonoBehaviour
 
             if (string.IsNullOrWhiteSpace(teamNameStr))
             {
-                if (teamNameErrorObject != null)
-                {
-                    // If a toast is already showing, stop it so we can restart the timer
-                    if (errorToastCoroutine != null) StopCoroutine(errorToastCoroutine);
-                    
-                    teamNameErrorObject.SetActive(true);
-                    
-                    // Start the coroutine to hide it after 3 seconds
-                    errorToastCoroutine = StartCoroutine(HideErrorToastAfterDelay(3f));
-                }
-                Debug.LogWarning("⚠️ Cannot start game: Team Name is empty.");
+                ShowErrorMessage("Please enter a team name.");
                 return;
             }
 
@@ -345,8 +370,12 @@ public class GameModeManager : MonoBehaviour
             if (teamCreationLoader != null) teamCreationLoader.SetActive(true);
             input.interactable = false;
 
+            // 🧠 TIMEOUT LOGIC: If Firestore doesn't respond in 10s, fail gracefully
+            Coroutine timeoutCoroutine = StartCoroutine(TeamCreationTimeout(10f));
+
             // Call TeamManager to create team in Firestore
             TeamManager.Instance.CreateTeam(teamNameStr, (teamId) => {
+                if (timeoutCoroutine != null) StopCoroutine(timeoutCoroutine);
                 
                 // Success: Hide loader, enable input (though we hide panel anyway)
                 if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
@@ -361,15 +390,41 @@ public class GameModeManager : MonoBehaviour
                 SetState(GameState.Playing);
 
             }, (errorMsg) => {
-                Debug.LogError("Failed to create team: " + errorMsg);
-                
-                // Failure: Hide loader and re-enable input so user can try again
-                if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
-                input.interactable = true;
-                
-                // Optionally show error to user
+                if (timeoutCoroutine != null) StopCoroutine(timeoutCoroutine);
+                HandleTeamCreationFailure(errorMsg);
             });
         }
+    }
+
+    private void ShowErrorMessage(string msg)
+    {
+        if (teamNameErrorObject != null)
+        {
+            var textComp = teamNameErrorObject.GetComponentInChildren<TextMeshProUGUI>();
+            if (textComp != null) textComp.text = msg;
+
+            if (errorToastCoroutine != null) StopCoroutine(errorToastCoroutine);
+            teamNameErrorObject.SetActive(true);
+            errorToastCoroutine = StartCoroutine(HideErrorToastAfterDelay(3f));
+        }
+        Debug.LogWarning($"⚠️ {msg}");
+    }
+
+    private void HandleTeamCreationFailure(string errorMsg)
+    {
+        Debug.LogError("Failed to create team: " + errorMsg);
+        
+        if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
+        input.interactable = true;
+        
+        ShowErrorMessage("Connection Error. Please try again.");
+    }
+
+    private IEnumerator TeamCreationTimeout(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        Debug.LogWarning("⏱ Team creation timed out.");
+        HandleTeamCreationFailure("Timeout");
     }
 
     private IEnumerator HideErrorToastAfterDelay(float delay)

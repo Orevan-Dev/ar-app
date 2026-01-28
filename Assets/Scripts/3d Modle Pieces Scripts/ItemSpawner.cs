@@ -154,6 +154,7 @@ public class ItemSpawner : MonoBehaviour
         spawnedItems.Clear();
 
         Debug.Log($"🔥 START SPAWNING {items.Count} ITEMS");
+        float startTime = Time.time;
 
         // Use player position logic as before
         Vector3 originPos = Camera.main.transform.position;
@@ -240,6 +241,8 @@ public class ItemSpawner : MonoBehaviour
                 Debug.LogError($"❌ FAILED to place item {data.name} even after 200 attempts!");
             }
         }
+
+        Debug.Log($"✅ FINISHED SPAWNING {spawnedItems.Count} items in {Time.time - startTime:F2}s");
     }
 
     /// <summary>

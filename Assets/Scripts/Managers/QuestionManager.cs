@@ -19,7 +19,23 @@ public class QuestionManager : MonoBehaviour
     
     private void Awake()
     {
-        if (Instance == null) Instance = this;
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else if (Instance != this)
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    /// <summary>
+    /// Resets the manager state for a fresh game session.
+    /// </summary>
+    public void ResetManager()
+    {
+        Debug.Log("[QuestionManager] Resetting manager state.");
+        EndSession();
     }
 
     private void Update()

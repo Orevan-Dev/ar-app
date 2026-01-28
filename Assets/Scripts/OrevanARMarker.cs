@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Video;
@@ -6,7 +6,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.IO;
 using UnityEngine.Networking;
-
+using Vuforia; // Essential for TrackableBehaviour
 
 public class OrevanARMarker : DefaultTrackableEventHandler
 {
@@ -27,6 +27,44 @@ public class OrevanARMarker : DefaultTrackableEventHandler
     //public GoogleAnalyticsV4 googleAnalytics;
 
     private bool isTracked;
+    public bool IsCurrentlyTracked => isTracked;
+
+    // 🧠 FIX: Check real Vuforia status because isTracked gets reset manually
+    public bool IsVuforiaTracked
+    {
+        get
+        {
+            var tb = GetComponent<TrackableBehaviour>();
+            if (tb == null) return false;
+
+            // 1. If Vuforia says "TRACKED", it is definitely visible.
+            if (tb.CurrentStatus == TrackableBehaviour.Status.TRACKED) return true;
+
+            // 2. If "EXTENDED_TRACKED", it means Vuforia knows the position but maybe not the image.
+            // On iOS, this happens often. We MUST trust it, BUT...
+            if (tb.CurrentStatus == TrackableBehaviour.Status.EXTENDED_TRACKED)
+            {
+                // ...only if the target is actually ON SCREEN. 
+                // This prevents the "Click to Play" from popping up when looking away.
+                return IsInMainCameraView(transform.position);
+            }
+
+            return false;
+        }
+    }
+
+    private bool IsInMainCameraView(Vector3 worldPos)
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return false;
+
+        Vector3 vp = cam.WorldToViewportPoint(worldPos);
+        // 🧠 RELAXED CHECK: Use a small margin (-0.1 to 1.1) to catch targets 
+        // that are partially on screen.
+        return vp.z > 0 && 
+               vp.x > -0.1f && vp.x < 1.1f && 
+               vp.y > -0.1f && vp.y < 1.1f;
+    }
     
     // 🧠 FIX: Allow external reset to force "Lost" state logic
     public void ForceReset()
@@ -40,6 +78,12 @@ public class OrevanARMarker : DefaultTrackableEventHandler
         if (Loading) Loading.SetActive(false);
         
         StopAllCoroutines();
+    }
+
+    public void SimulateTrackingFound()
+    {
+        Debug.Log($"🔄 Simulating Scan for {name} (iOS Fix)");
+        OnTrackingFound();
     }
 
     private int ScanCount = 0;
@@ -103,6 +147,20 @@ public class OrevanARMarker : DefaultTrackableEventHandler
 
     public void Update()
     {
+        // 🧠 iOS RECOVERY FIX: 
+        // If Vuforia thinks we are tracking but our internal 'isTracked' is false 
+        // (meaning we reset for a new game), we force the UI to show IF it's in view.
+        if (!isTracked && IsVuforiaTracked)
+        {
+            if (GameModeManager.Instance != null && 
+               (GameModeManager.Instance.CurrentState == GameState.None || 
+                GameModeManager.Instance.CurrentState == GameState.Scanned))
+            {
+                Debug.Log($"📱 [Update Recovery] Marker {name} found in view. Re-triggering UI.");
+                OnTrackingFound();
+            }
+        }
+
         if (isTracked)
         {
             // 🧠 FIX: Do not process clicks if game is running

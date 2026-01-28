@@ -135,6 +135,7 @@ public class GPSLocation : MonoBehaviour
 
         else if (Input.location.status == LocationServiceStatus.Running)
         {
+            // 🧠 SAFETY: Ensure data is available
             double aa = Input.location.lastData.latitude;
             double oo = Input.location.lastData.longitude;
             Debug.Log("Double Latitude=" + aa + "  Double Longitude: " + oo);

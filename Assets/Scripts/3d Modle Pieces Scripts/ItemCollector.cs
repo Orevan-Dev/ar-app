@@ -13,16 +13,30 @@ public class ItemCollector : MonoBehaviour
     
     private void Start()
     {
-        playerCamera = Camera.main;
-        
+        RefreshCamera();
+    }
+
+    private void RefreshCamera()
+    {
         if (playerCamera == null)
         {
-            Debug.LogError("ItemCollector: Main Camera not found!");
+            playerCamera = Camera.main;
+            if (playerCamera != null)
+            {
+                Debug.Log("[ItemCollector] Main Camera found and assigned.");
+            }
         }
     }
     
     private void Update()
     {
+        // Safety check: ensure we have a camera
+        if (playerCamera == null)
+        {
+            RefreshCamera();
+            if (playerCamera == null) return; // Still no camera, skip this frame
+        }
+
         // Prioritize Touch Input for mobile
         if (Input.touchCount > 0)
         {
@@ -52,17 +66,26 @@ public class ItemCollector : MonoBehaviour
         Ray ray = playerCamera.ScreenPointToRay(screenPosition);
         RaycastHit hit;
         
+        Debug.Log($"[ItemCollector] Raycasting from {screenPosition}");
+
         // Check if ray hits an item collider
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, itemLayerMask))
         {
+            Debug.Log($"[ItemCollector] Hit object: {hit.collider.gameObject.name} on layer {hit.collider.gameObject.layer}");
+
             // Check if hit object has GameItemIdentifier component
             // We look on the object or its parent/root
             GameItemIdentifier identifier = hit.collider.GetComponentInParent<GameItemIdentifier>();
             
             if (identifier != null)
             {
+                Debug.Log($"[ItemCollector] Found Identifier: {identifier.ItemId}. Delegating to InteractionManager.");
                 // Delegate to Interaction Manager
                 ItemInteractionManager.Instance.OnItemClicked(identifier.gameObject);
+            }
+            else
+            {
+                Debug.LogWarning("[ItemCollector] Hit object has no GameItemIdentifier in parent.");
             }
         }
     }

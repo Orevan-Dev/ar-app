@@ -37,6 +37,7 @@ public class ItemSpawner : MonoBehaviour
     private int itemCount;
     private float minSpawnRadius; // NEW: Inner "donut" hole radius
     private float minDistanceBetweenItems;
+    private float distanceMultiplier = 1.0f;
 
     private void Awake()
     {
@@ -97,8 +98,9 @@ public class ItemSpawner : MonoBehaviour
         itemCount = c.itemCount;
         minSpawnRadius = c.minSpawnRadius;
         minDistanceBetweenItems = c.minItemSpacing;
+        distanceMultiplier = c.distanceMultiplier;
 
-        Debug.Log("📦 ItemSpawner config applied");
+        Debug.Log($"📦 ItemSpawner config applied. DistMult: {distanceMultiplier}");
     }
 
 
@@ -156,15 +158,32 @@ public class ItemSpawner : MonoBehaviour
         Debug.Log($"🔥 START SPAWNING {items.Count} ITEMS");
         float startTime = Time.time;
 
-        // Use player position logic as before
-        Vector3 originPos = Camera.main.transform.position;
-        float floorY = PlayAreaAnchor.Instance != null ? PlayAreaAnchor.Instance.transform.position.y : originPos.y - 1.4f;
+        // 🧠 HYBRID FIX 1: Origin is the ANCHOR, not the CAMERA
+        // This stops items from orbiting the player if they walk away.
+        Vector3 originPos;
+        Vector3 forwardDir;
+        
+        if (PlayAreaAnchor.Instance != null)
+        {
+             originPos = PlayAreaAnchor.Instance.transform.position;
+             forwardDir = PlayAreaAnchor.Instance.transform.forward;
+             // If anchor has no rotation (identity), use camera forward at start or just Z forward
+             if (forwardDir == Vector3.zero) forwardDir = Vector3.forward;
+        }
+        else
+        {
+             originPos = Camera.main.transform.position;
+             forwardDir = Camera.main.transform.forward;
+        }
+
+        float floorY = originPos.y; // Keep same floor level
         originPos.y = floorY;
 
         // Use raw Config values
         float halfW = playAreaWidth * 0.5f; 
         float halfD = playAreaDepth * 0.5f;
         float minR = Mathf.Max(minSpawnRadius, 1.0f);
+        float maxR = Mathf.Min(halfW, halfD); // Use radial limit for the "Room" feel
 
         // Map prefabs by name for easy lookup
         if (availablePrefabs == null) LoadPrefabsFromResources();
@@ -190,25 +209,62 @@ public class ItemSpawner : MonoBehaviour
             {
                 attempts++;
 
-                // 🧠 RELAXATION LOGIC: If we can't find a spot, slowly reduce requirements
+                // 🧠 RELAXATION LOGIC
                 if (attempts > 50) 
                 {
-                    currentSpacing *= 0.95f; // Reduce spacing requirement
-                    currentMinR *= 0.95f;   // Bring items closer to center
+                    currentSpacing *= 0.95f; 
+                    currentMinR *= 0.95f;   
                 }
 
-                 // A. Cartesian Random
-                float rawX = Random.Range(-halfW, halfW);
-                float rawZ = Random.Range(-halfD, halfD);
-                Vector3 localCandidate = new Vector3(rawX, 0f, rawZ);
+                // 🧠 HYBRID FIX 2 & 3: Forward Bias + Distance Multiplier
+                // We use Polar Coordinates to easily control Angle and Distance
+                
+                // A. Angle with Bias
+                float bias = Config.forwardBias; // 0.0 to 1.0
+                float randomVal = Random.value;
+                float angle;
 
-                // B. Hole Check
-                if (localCandidate.magnitude < currentMinR) continue; 
+                // "Bias" % chance to be in the front 180 degrees (-90 to +90)
+                if (randomVal < bias)
+                {
+                    angle = Random.Range(-90f, 90f);
+                }
+                else
+                {
+                    // Remaining % chance to be in the back 180 degrees
+                    angle = Random.Range(90f, 270f);
+                }
+                
+                // Rotate angle relative to forward direction
+                float baseAngle = Mathf.Atan2(forwardDir.z, forwardDir.x) * Mathf.Rad2Deg;
+                float finalAngleRad = (baseAngle - angle) * Mathf.Deg2Rad; // Unity rotation is clockwise? Check math. 
+                // Standard trig: x = cos, z = sin. 0 deg is +X. 
+                // Let's use Quaternion for safety to rotate the vector.
+                Quaternion rot = Quaternion.AngleAxis(angle, Vector3.up);
+                Vector3 dir = rot * forwardDir;
+
+                // B. Distance with Multiplier
+                // Pick a distance between hole and max room radius
+                float rawDistance = Random.Range(currentMinR, maxR);
+                // float roll = Random.value;
+                // float rawDistance;
+
+                // if (roll < 0.3f)
+                //     rawDistance = Random.Range(currentMinR, maxR * 0.45f);   // near
+                // else if (roll < 0.7f)
+                //     rawDistance = Random.Range(maxR * 0.45f, maxR * 0.75f);  // mid
+                // else
+                //     rawDistance = Random.Range(maxR * 0.75f, maxR);          // far
+                // 🧠 CONTROL KNOB: Multiply the distance visually
+                // If multiplier is 2.0, items spawn 2x further than the "room logic" suggests
+                float finalDistance = rawDistance * distanceMultiplier;
+
+                Vector3 localCandidate = dir * finalDistance;
 
                 // C. Position
                 Vector3 futureWorldPos = originPos + localCandidate;
                 
-                // D. Spacing Check
+                // D. Spacing Check (Standard)
                 bool tooClose = false;
                 foreach (var existingItem in spawnedItems)
                 {
@@ -224,8 +280,11 @@ public class ItemSpawner : MonoBehaviour
                 // E. Spawn
                 GameObject itemFn = Instantiate(prefab, futureWorldPos, Quaternion.identity);
                 itemFn.transform.localScale = Vector3.one * itemScaleFactor; 
-                itemFn.transform.SetParent(null); 
+                itemFn.transform.SetParent(null);
                 
+                // Rotate item to face the origin (optional, looks nice)
+                itemFn.transform.LookAt(new Vector3(originPos.x, itemFn.transform.position.y, originPos.z));
+
                 // Add Identifier
                 var idComp = itemFn.AddComponent<GameItemIdentifier>();
                 idComp.ItemId = data.id;
@@ -233,7 +292,7 @@ public class ItemSpawner : MonoBehaviour
                 spawnedItems.Add(itemFn);
                 placed = true;
 
-                Debug.Log($"🧩 Item {data.name} Spawned at {futureWorldPos} after {attempts} attempts. (Spacing used: {currentSpacing:F2})");
+                Debug.Log($"🧩 Item {data.name} Spawned at {futureWorldPos} (Dist: {finalDistance:F1}m). Bias used: {randomVal < bias}");
             }
 
             if (!placed)

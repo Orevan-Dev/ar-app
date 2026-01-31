@@ -18,6 +18,7 @@ public class GameRoomConfigManager : MonoBehaviour
     public float minItemSpacing;
     public float forwardBias;
     public float minSpawnRadius; // NEW: Inner "donut" hole radius
+    public float distanceMultiplier; // NEW: Global distance scalar
 
     // Discovery
     public float discoveryRadius;
@@ -77,6 +78,11 @@ public class GameRoomConfigManager : MonoBehaviour
                   minSpawnRadius = 1.5f; // Default to Search Radius if missing
 
               forwardBias = Mathf.Clamp01(data.GetValue<float>("forwardBias"));
+              
+              if (data.ContainsField("distanceMultiplier"))
+                  distanceMultiplier = data.GetValue<float>("distanceMultiplier");
+              else
+                  distanceMultiplier = 1.0f;
 
               discoveryRadius = data.GetValue<float>("discoveryRadius");
               fadeSpeed = data.GetValue<float>("fadeSpeed");
@@ -116,6 +122,7 @@ public class GameRoomConfigManager : MonoBehaviour
         itemCount = Mathf.Max(1, itemCount);
         minItemSpacing = Mathf.Max(0.2f, minItemSpacing);
         minSpawnRadius = Mathf.Clamp(minSpawnRadius, 0f, Mathf.Min(playAreaWidth, playAreaDepth) * 0.45f); // Prevent hole bigger than room
+        distanceMultiplier = Mathf.Clamp(distanceMultiplier, 0.1f, 10f);
 
         discoveryRadius = Mathf.Max(interactionRadius + 0.1f, discoveryRadius);
         interactionRadius = Mathf.Max(0.2f, interactionRadius);
@@ -132,6 +139,7 @@ public class GameRoomConfigManager : MonoBehaviour
         minItemSpacing = 1.0f;
         minSpawnRadius = 1.5f; // Was 0.8f. Forces items 1.5m away.
         forwardBias = 0.5f;
+        distanceMultiplier = 1.0f; // Default to 1 (no change)
 
         discoveryRadius = 1.2f;
         fadeSpeed = 2f;

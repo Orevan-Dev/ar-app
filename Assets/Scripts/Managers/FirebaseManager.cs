@@ -20,9 +20,22 @@ public class FirebaseManager : MonoBehaviour
             return;
         }
         
-        // Assuming Firebase is already initialized by the time this is called, 
-        // or we lazily get the instance.
+        // Wait for Firebase initialization
+        if (FirebaseInitializer.Instance != null && FirebaseInitializer.Instance.IsInitialized)
+        {
+            InitializeFirestore();
+        }
+        else
+        {
+            FirebaseInitializer.OnFirebaseInitialized += InitializeFirestore;
+        }
+    }
+
+    private void InitializeFirestore()
+    {
+        Debug.Log("[FirebaseManager] Initializing Firestore...");
         db = FirebaseFirestore.DefaultInstance;
+        FirebaseInitializer.OnFirebaseInitialized -= InitializeFirestore;
     }
 
     /// <summary>

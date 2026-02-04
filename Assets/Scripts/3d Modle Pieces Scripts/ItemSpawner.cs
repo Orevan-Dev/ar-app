@@ -39,6 +39,10 @@ public class ItemSpawner : MonoBehaviour
     private float minDistanceBetweenItems;
     private float distanceMultiplier = 1.0f;
 
+    // 🧠 SAFE SPAWN CONSTANTS
+    private const float MIN_SAFE_DISTANCE = 1.5f; // Real-world meters - prevents spawning too close
+    private const float VERTICAL_VARIANCE = 0.3f; // ±0.3 meters - adds natural height variation
+
     private void Awake()
     {
         // Singleton pattern
@@ -188,6 +192,10 @@ public class ItemSpawner : MonoBehaviour
         // Map prefabs by name for easy lookup
         if (availablePrefabs == null) LoadPrefabsFromResources();
         
+        // 🧠 SAFE SPAWN: Calculate slice size for even distribution
+        float sliceSize = 360f / items.Count;
+        int itemIndex = 0;
+        
         foreach (var data in items)
         {
             // Find prefab
@@ -203,66 +211,46 @@ public class ItemSpawner : MonoBehaviour
             int attempts = 0;
             bool placed = false;
             float currentSpacing = minDistanceBetweenItems;
-            float currentMinR = minR;
+            float currentMaxR = maxR; // Track max radius for expansion
 
             while (!placed && attempts < 200) 
             {
                 attempts++;
 
-                // 🧠 RELAXATION LOGIC
+                // 🧠 SAFE SPAWN FIX 1: Expansion instead of Shrinking
                 if (attempts > 50) 
                 {
-                    currentSpacing *= 0.95f; 
-                    currentMinR *= 0.95f;   
+                    currentSpacing *= 0.95f; // Relax spacing (safe)
+                    currentMaxR *= 1.1f;     // EXPAND outward, never shrink inward
                 }
 
-                // 🧠 HYBRID FIX 2 & 3: Forward Bias + Distance Multiplier
-                // We use Polar Coordinates to easily control Angle and Distance
-                
-                // A. Angle with Bias
-                float bias = Config.forwardBias; // 0.0 to 1.0
-                float randomVal = Random.value;
-                float angle;
-
-                // "Bias" % chance to be in the front 180 degrees (-90 to +90)
-                if (randomVal < bias)
-                {
-                    angle = Random.Range(-90f, 90f);
-                }
-                else
-                {
-                    // Remaining % chance to be in the back 180 degrees
-                    angle = Random.Range(90f, 270f);
-                }
+                // 🧠 SAFE SPAWN FIX 2: Angular Slice Distribution
+                // Divide 360° into equal slices, pick random angle within this item's slice
+                float sliceStart = itemIndex * sliceSize;
+                float sliceEnd = sliceStart + sliceSize;
+                float angle = Random.Range(sliceStart, sliceEnd);
                 
                 // Rotate angle relative to forward direction
-                float baseAngle = Mathf.Atan2(forwardDir.z, forwardDir.x) * Mathf.Rad2Deg;
-                float finalAngleRad = (baseAngle - angle) * Mathf.Deg2Rad; // Unity rotation is clockwise? Check math. 
-                // Standard trig: x = cos, z = sin. 0 deg is +X. 
-                // Let's use Quaternion for safety to rotate the vector.
                 Quaternion rot = Quaternion.AngleAxis(angle, Vector3.up);
                 Vector3 dir = rot * forwardDir;
 
-                // B. Distance with Multiplier
-                // Pick a distance between hole and max room radius
-                float rawDistance = Random.Range(currentMinR, maxR);
-                // float roll = Random.value;
-                // float rawDistance;
-
-                // if (roll < 0.3f)
-                //     rawDistance = Random.Range(currentMinR, maxR * 0.45f);   // near
-                // else if (roll < 0.7f)
-                //     rawDistance = Random.Range(maxR * 0.45f, maxR * 0.75f);  // mid
-                // else
-                //     rawDistance = Random.Range(maxR * 0.75f, maxR);          // far
-                // 🧠 CONTROL KNOB: Multiply the distance visually
-                // If multiplier is 2.0, items spawn 2x further than the "room logic" suggests
+                // 🧠 SAFE SPAWN FIX 3: Minimum Distance with Outward Clamp
+                // Pick random distance, then enforce minimum safe distance
+                float rawDistance = Random.Range(minR, currentMaxR);
+                rawDistance = Mathf.Max(rawDistance, MIN_SAFE_DISTANCE); // Never closer than 1.5m
+                
+                // Apply distance multiplier AFTER safety clamp
                 float finalDistance = rawDistance * distanceMultiplier;
 
                 Vector3 localCandidate = dir * finalDistance;
 
                 // C. Position
                 Vector3 futureWorldPos = originPos + localCandidate;
+                
+                // 🧠 SAFE SPAWN FIX 4: Vertical Randomization
+                // Add natural height variation instead of flat line
+                float verticalOffset = Random.Range(-VERTICAL_VARIANCE, VERTICAL_VARIANCE);
+                futureWorldPos.y = Camera.main.transform.position.y + verticalOffset;
                 
                 // D. Spacing Check (Standard)
                 bool tooClose = false;
@@ -285,6 +273,17 @@ public class ItemSpawner : MonoBehaviour
                 // Rotate item to face the origin (optional, looks nice)
                 itemFn.transform.LookAt(new Vector3(originPos.x, itemFn.transform.position.y, originPos.z));
 
+                // 🧠 SAFE SPAWN FIX 5: Double-Sided Rendering
+                // Enable visibility from inside mesh (prevents invisibility when camera clips)
+                Renderer[] renderers = itemFn.GetComponentsInChildren<Renderer>();
+                foreach (var renderer in renderers)
+                {
+                    foreach (var mat in renderer.materials)
+                    {
+                        mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+                    }
+                }
+
                 // Add Identifier
                 var idComp = itemFn.AddComponent<GameItemIdentifier>();
                 idComp.ItemId = data.id;
@@ -292,13 +291,15 @@ public class ItemSpawner : MonoBehaviour
                 spawnedItems.Add(itemFn);
                 placed = true;
 
-                Debug.Log($"🧩 Item {data.name} Spawned at {futureWorldPos} (Dist: {finalDistance:F1}m). Bias used: {randomVal < bias}");
+                Debug.Log($"🧩 Item {data.name} Spawned at {futureWorldPos} (Dist: {finalDistance:F1}m, Angle: {angle:F0}°, Slice: {itemIndex + 1}/{items.Count})");
             }
 
             if (!placed)
             {
                 Debug.LogError($"❌ FAILED to place item {data.name} even after 200 attempts!");
             }
+            
+            itemIndex++; // Move to next slice
         }
 
         Debug.Log($"✅ FINISHED SPAWNING {spawnedItems.Count} items in {Time.time - startTime:F2}s");

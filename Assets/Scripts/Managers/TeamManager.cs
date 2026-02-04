@@ -35,12 +35,27 @@ namespace Managers
 
         private void Start()
         {
-            // Initialize Firestore
+            // Wait for Firebase initialization
+            if (FirebaseInitializer.Instance != null && FirebaseInitializer.Instance.IsInitialized)
+            {
+                InitializeFirestore();
+            }
+            else
+            {
+                FirebaseInitializer.OnFirebaseInitialized += InitializeFirestore;
+            }
+        }
+
+        private void InitializeFirestore()
+        {
+            Debug.Log("[TeamManager] Initializing Firestore...");
             db = FirebaseFirestore.DefaultInstance;
             teamsRef = db.Collection("teams");
             
             // Listen for any team becoming a winner to stop game globally
             ListenForWinner();
+            
+            FirebaseInitializer.OnFirebaseInitialized -= InitializeFirestore;
         }
 
         private void ListenForWinner()

@@ -11,6 +11,7 @@ public class ARItem : MonoBehaviour
 
     private float currentAlpha = 0f;
     private bool isCollected = false;
+    private bool hasBeenDiscovered = false; // 🧠 FIX: Once discovered, stay visible
 
     private Transform cameraTransform;
     private bool isConfigured = false;
@@ -62,7 +63,16 @@ public class ARItem : MonoBehaviour
         if (isCollected) return;
 
         float distance = Vector3.Distance(transform.position, cameraTransform.position);
-        float targetAlpha = distance <= discoveryRadius ? 1f : 0f;
+        
+        // 🧠 FIX: Once discovered, stay visible permanently
+        if (distance <= discoveryRadius && !hasBeenDiscovered)
+        {
+            hasBeenDiscovered = true;
+            Debug.Log($"🔍 Item {name} DISCOVERED! Will stay visible permanently.");
+        }
+
+        // Set target alpha: if discovered OR currently close, show it
+        float targetAlpha = (hasBeenDiscovered || distance <= discoveryRadius) ? 1f : 0f;
 
         if (!Mathf.Approximately(currentAlpha, targetAlpha))
         {

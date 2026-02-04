@@ -41,7 +41,23 @@ public class GameRoomConfigManager : MonoBehaviour
         }
 
         DontDestroyOnLoad(gameObject);
+        
+        // Wait for Firebase initialization
+        if (FirebaseInitializer.Instance != null && FirebaseInitializer.Instance.IsInitialized)
+        {
+            InitializeFirestore();
+        }
+        else
+        {
+            FirebaseInitializer.OnFirebaseInitialized += InitializeFirestore;
+        }
+    }
+
+    private void InitializeFirestore()
+    {
+        Debug.Log("[GameRoomConfigManager] Initializing Firestore...");
         db = FirebaseFirestore.DefaultInstance;
+        FirebaseInitializer.OnFirebaseInitialized -= InitializeFirestore;
     }
 
     public void LoadRoomConfig(string roomId)
@@ -84,10 +100,14 @@ public class GameRoomConfigManager : MonoBehaviour
               else
                   distanceMultiplier = 1.0f;
 
-              discoveryRadius = data.GetValue<float>("discoveryRadius");
+              // 🧠 FIX: Scale discovery radius to match world coordinates
+              // World scale is ~60 units = 1 real meter, so multiply by 60
+              float rawDiscoveryRadius = data.GetValue<float>("discoveryRadius");
+              discoveryRadius = rawDiscoveryRadius * 60f; // Scale to match world units
+              
               fadeSpeed = data.GetValue<float>("fadeSpeed");
 
-              interactionRadius = data.GetValue<float>("interactionRadius");
+              interactionRadius = data.GetValue<float>("interactionRadius") * 60f; // Also scale interaction radius
 
               Validate();
               IsReady = true;
@@ -141,8 +161,9 @@ public class GameRoomConfigManager : MonoBehaviour
         forwardBias = 0.5f;
         distanceMultiplier = 1.0f; // Default to 1 (no change)
 
-        discoveryRadius = 1.2f;
+        // 🧠 FIX: Apply same world scale (60x) to defaults
+        discoveryRadius = 1.2f * 60f; // 1.2 real meters = 72 units
         fadeSpeed = 2f;
-        interactionRadius = 0.8f;
+        interactionRadius = 0.8f * 60f; // 0.8 real meters = 48 units
     }
 }

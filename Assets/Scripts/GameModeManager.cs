@@ -44,6 +44,14 @@ public class GameModeManager : MonoBehaviour
             Debug.Log(arCamera != null ? "🎥 Auto-assigned AR Camera" : "⚠️ Camera.main not found!");
         }
 
+        // Ensure FirebaseInitializer exists
+        if (FindObjectOfType<FirebaseInitializer>() == null)
+        {
+            GameObject fi = new GameObject("FirebaseInitializer");
+            fi.AddComponent<FirebaseInitializer>();
+            Debug.Log("Created FirebaseInitializer automatically.");
+        }
+
         // Ensure TeamManager exists
         if (FindObjectOfType<TeamManager>() == null)
         {
@@ -362,7 +370,7 @@ public class GameModeManager : MonoBehaviour
 
             if (string.IsNullOrWhiteSpace(teamNameStr))
             {
-                ShowErrorMessage("Please enter a team name.");
+                ShowErrorMessage("");
                 return;
             }
 
@@ -417,7 +425,7 @@ public class GameModeManager : MonoBehaviour
         if (teamCreationLoader != null) teamCreationLoader.SetActive(false);
         input.interactable = true;
         
-        ShowErrorMessage("Connection Error. Please try again.");
+        // ShowErrorMessage("Connection Error. Please try again.");
     }
 
     private IEnumerator TeamCreationTimeout(float delay)
